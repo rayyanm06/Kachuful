@@ -16,7 +16,7 @@ export interface PlayedCard {
  */
 export function generateRoundsStructure(numPlayers: number, customMaxCards?: number): number[] {
   const calculatedMax = Math.min(8, Math.floor(52 / Math.max(2, Math.min(12, numPlayers))));
-  const maxCards = customMaxCards && customMaxCards > 0 && customMaxCards <= calculatedMax
+  const maxCards = customMaxCards && customMaxCards >= 1 && customMaxCards <= 13
     ? customMaxCards
     : calculatedMax;
 

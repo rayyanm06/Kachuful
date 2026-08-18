@@ -57,7 +57,7 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen w-full flex flex-col justify-between overflow-x-hidden bg-[#f4f7f5] text-slate-900 selection:bg-emerald-600 selection:text-white">
+    <div className="min-h-screen w-full flex flex-col justify-between overflow-x-hidden bg-[#f4f7f5] text-slate-900 selection:bg-indigo-600 selection:text-white">
       {/* Toast Error Alert */}
       {errorMessage && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-rose-50 border border-rose-300 text-rose-800 text-xs font-semibold shadow-lg animate-fade-in">
@@ -85,6 +85,7 @@ export function App() {
           gameState={gameState}
           onMakeBid={makeBid}
           onPlayCard={playCard}
+          onNextRound={nextRound}
         />
       </main>
 

@@ -41,10 +41,8 @@ io.on('connection', (socket) => {
 
   socket.on('createRoom', (data: { playerName: string; customMaxCards?: number }, callback) => {
     try {
-      const { roomId, sessionToken, playerId } = roomManager.createRoom(data.playerName, socket.id, data.customMaxCards);
-      socket.join(roomId);
+      const { roomId, sessionToken, playerId } = roomManager.createRoom(socket, data.playerName, data.customMaxCards);
       socket.emit('roomCreated', { roomId, sessionToken, playerId });
-      roomManager.broadcastGameState(roomId);
       if (callback) callback({ success: true, roomId });
     } catch (err: any) {
       console.error('Error creating room:', err);
@@ -55,15 +53,9 @@ io.on('connection', (socket) => {
 
   socket.on('joinRoom', (data: { roomId: string; playerName: string; sessionToken?: string }, callback) => {
     try {
-      const result = roomManager.joinRoom(data.roomId, data.playerName, socket.id, data.sessionToken);
-      if (result.success && result.sessionToken && result.playerId) {
-        socket.join(data.roomId.toUpperCase());
-        socket.emit('roomJoined', { roomId: data.roomId.toUpperCase(), sessionToken: result.sessionToken, playerId: result.playerId });
-        if (callback) callback({ success: true });
-      } else {
-        socket.emit('errorNotification', result.error || 'Failed to join room');
-        if (callback) callback({ success: false, error: result.error });
-      }
+      const { roomId, sessionToken, playerId } = roomManager.joinRoom(socket, data.roomId, data.playerName, data.sessionToken);
+      socket.emit('roomJoined', { roomId, sessionToken, playerId });
+      if (callback) callback({ success: true });
     } catch (err: any) {
       console.error('Error joining room:', err);
       socket.emit('errorNotification', err.message || 'Failed to join room');
@@ -73,14 +65,8 @@ io.on('connection', (socket) => {
 
   socket.on('reconnectSeat', (data: { roomId: string; sessionToken: string }, callback) => {
     try {
-      const result = roomManager.joinRoom(data.roomId, '', socket.id, data.sessionToken);
-      if (result.success && result.sessionToken && result.playerId) {
-        socket.join(data.roomId.toUpperCase());
-        socket.emit('roomJoined', { roomId: data.roomId.toUpperCase(), sessionToken: result.sessionToken, playerId: result.playerId });
-        if (callback) callback({ success: true });
-      } else {
-        if (callback) callback({ success: false, error: result.error || 'Could not restore seat' });
-      }
+      const success = roomManager.reconnectSeat(socket, data.roomId, data.sessionToken);
+      if (callback) callback({ success });
     } catch (err: any) {
       if (callback) callback({ success: false, error: err.message });
     }
@@ -88,14 +74,13 @@ io.on('connection', (socket) => {
 
   socket.on('transferSeat', (data: { transferCode: string }, callback) => {
     try {
-      const result = roomManager.transferSeat(data.transferCode, socket.id);
-      if (result.success && result.roomId && result.sessionToken && result.playerId) {
-        socket.join(result.roomId);
+      const result = roomManager.transferSeat(socket, data.transferCode);
+      if (result) {
         socket.emit('roomJoined', { roomId: result.roomId, sessionToken: result.sessionToken, playerId: result.playerId });
         if (callback) callback({ success: true, roomId: result.roomId });
       } else {
-        socket.emit('errorNotification', result.error || 'Invalid transfer code');
-        if (callback) callback({ success: false, error: result.error });
+        socket.emit('errorNotification', 'Invalid transfer code');
+        if (callback) callback({ success: false, error: 'Invalid transfer code' });
       }
     } catch (err: any) {
       if (callback) callback({ success: false, error: err.message });
@@ -104,7 +89,6 @@ io.on('connection', (socket) => {
 
   socket.on('startGame', () => {
     try {
-      // Find room of player
       for (const [roomId, room] of (roomManager as any).rooms.entries()) {
         const player = room.engine.state.players.find((p: any) => p.id === socket.id);
         if (player) {
@@ -122,8 +106,8 @@ io.on('connection', (socket) => {
       for (const [roomId, room] of (roomManager as any).rooms.entries()) {
         const player = room.engine.state.players.find((p: any) => p.id === socket.id);
         if (player) {
-          const res = roomManager.addBot(roomId, socket.id);
-          if (callback) callback(res);
+          roomManager.addBot(roomId, socket.id);
+          if (callback) callback({ success: true });
           break;
         }
       }
@@ -230,5 +214,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3001;
 server.listen(Number(PORT), '0.0.0.0', () => {
-  console.log(`🂡 Kachuful Game Server running on http://0.0.0.0:${PORT}`);
+  console.log(`🃏 Kachuful Game Server running on http://0.0.0.0:${PORT}`);
 });

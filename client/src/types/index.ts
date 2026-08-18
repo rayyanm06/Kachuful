@@ -8,12 +8,28 @@ export interface Card {
   id: string;
 }
 
+export const RANK_VALUES: Record<Rank, number> = {
+  '2': 2,
+  '3': 3,
+  '4': 4,
+  '5': 5,
+  '6': 6,
+  '7': 7,
+  '8': 8,
+  '9': 9,
+  '10': 10,
+  'J': 11,
+  'Q': 12,
+  'K': 13,
+  'A': 14,
+};
+
 export type GamePhase = 'LOBBY' | 'DEALING' | 'BIDDING' | 'PLAYING' | 'TRICK_RESOLVING' | 'ROUND_SUMMARY' | 'GAME_OVER';
 
 export interface PlayerPublic {
   id: string;
   name: string;
-  avatarSeed: string;
+  avatarSeed?: string;
   seatIndex: number;
   isHost: boolean;
   isBot: boolean;
@@ -71,12 +87,12 @@ export interface ClientGameState {
   roundsStructure: number[];
   currentCardsCount: number;
   trumpSuit: Suit;
-  isBlind: boolean;
+  isBlind?: boolean;
   isBlindBidding: boolean;
   currentTrick: Trick;
   completedTricks: Trick[];
   roundScores: RoundHistory[];
-  settings: GameSettings;
+  settings?: GameSettings;
   hookBidForDealer: number | null;
   roundStartTime?: number;
   lastTrickWinner?: {

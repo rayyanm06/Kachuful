@@ -1,170 +1,185 @@
-import { Server } from 'socket.io';
-import { GameEngine, Player } from '../engine/gameEngine.js';
+import { Server, Socket } from 'socket.io';
+import { GameEngine } from '../engine/gameEngine.js';
 import { chooseBotBid, chooseBotCard } from '../engine/botLogic.js';
 import { getValidBids } from '../engine/rules.js';
-import { Card } from '../engine/deck.js';
 
-const BOT_NAMES = [
-  'Arya (Bot)',
-  'Diya (Bot)',
-  'Kabir (Bot)',
-  'Rohan (Bot)',
-  'Ananya (Bot)',
-  'Vikram (Bot)',
-  'Meera (Bot)',
-  'Arjun (Bot)',
-  'Tara (Bot)',
-  'Siddharth (Bot)',
-  'Neha (Bot)',
-];
-
-export interface Room {
+interface Room {
   id: string;
   engine: GameEngine;
   createdAt: number;
-  lastActive: number;
-  trickHoldTimer?: NodeJS.Timeout;
+  customMaxCards?: number;
 }
 
 export class RoomManager {
-  private rooms: Map<string, Room> = new Map();
-  private socketToPlayerMap: Map<string, { roomId: string; playerId: string; sessionToken: string }> = new Map();
   private io: Server;
+  private rooms: Map<string, Room> = new Map();
+  private socketToPlayerMap: Map<string, { roomId: string; playerId: string }> = new Map();
 
   constructor(io: Server) {
     this.io = io;
   }
 
-  public generateRoomCode(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = '';
-    for (let i = 0; i < 4; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    if (this.rooms.has(code)) {
-      return this.generateRoomCode();
-    }
-    return code;
-  }
+  public createRoom(
+    socket: Socket,
+    playerName: string,
+    customMaxCards?: number
+  ): { roomId: string; sessionToken: string; playerId: string } {
+    let roomId = '';
+    do {
+      roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    } while (this.rooms.has(roomId));
 
-  public generateSessionToken(): string {
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-  }
+    const sessionToken = Math.random().toString(36).substring(2, 15);
+    const transferCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const playerId = socket.id;
 
-  public createRoom(hostName: string, socketId: string, customMaxCards?: number): { roomId: string; sessionToken: string; playerId: string } {
-    const roomId = this.generateRoomCode();
     const engine = new GameEngine(roomId, customMaxCards);
-    const sessionToken = this.generateSessionToken();
-
-    const host = engine.addPlayer(socketId, hostName || 'Host', `avatar_${socketId}`, true, false, sessionToken);
+    engine.addPlayer(playerId, playerName, true, false, sessionToken, transferCode);
 
     this.rooms.set(roomId, {
       id: roomId,
       engine,
       createdAt: Date.now(),
-      lastActive: Date.now(),
+      customMaxCards,
     });
 
-    this.socketToPlayerMap.set(socketId, { roomId, playerId: socketId, sessionToken });
+    this.socketToPlayerMap.set(socket.id, { roomId, playerId });
+    socket.join(roomId);
 
-    return { roomId, sessionToken, playerId: host.id };
+    return { roomId, sessionToken, playerId };
   }
 
   public joinRoom(
+    socket: Socket,
     roomId: string,
     playerName: string,
-    socketId: string,
     existingSessionToken?: string
-  ): { success: boolean; sessionToken?: string; playerId?: string; error?: string } {
+  ): { roomId: string; sessionToken: string; playerId: string } {
     const room = this.rooms.get(roomId.toUpperCase());
     if (!room) {
-      return { success: false, error: `Room ${roomId} does not exist` };
+      throw new Error('Room not found');
     }
 
-    room.lastActive = Date.now();
+    const playerId = socket.id;
 
+    // Check if player is reconnecting with an existing sessionToken
     if (existingSessionToken) {
-      const existingPlayer = room.engine.reconnectPlayer(existingSessionToken, socketId);
+      const existingPlayer = room.engine.state.players.find(
+        p => p.sessionToken === existingSessionToken
+      );
+
       if (existingPlayer) {
-        this.socketToPlayerMap.set(socketId, { roomId: room.id, playerId: existingPlayer.id, sessionToken: existingSessionToken });
+        // Swap socket mapping to the reconnected socket
+        this.socketToPlayerMap.delete(existingPlayer.id);
+        existingPlayer.id = playerId;
+        existingPlayer.isConnected = true;
+        this.socketToPlayerMap.set(playerId, { roomId: room.id, playerId });
+        socket.join(room.id);
         this.broadcastGameState(room.id);
-        return { success: true, sessionToken: existingSessionToken, playerId: existingPlayer.id };
+        return { roomId: room.id, sessionToken: existingSessionToken, playerId };
       }
     }
 
     if (room.engine.state.phase !== 'LOBBY') {
-      return { success: false, error: 'Game is already in progress' };
+      throw new Error('Game already started');
     }
 
     if (room.engine.state.players.length >= 12) {
-      return { success: false, error: 'Room capacity reached (12 max)' };
+      throw new Error('Room is full (max 12 players)');
     }
 
-    const sessionToken = this.generateSessionToken();
-    try {
-      const player = room.engine.addPlayer(
-        socketId,
-        playerName || `Player ${room.engine.state.players.length + 1}`,
-        `avatar_${socketId}`,
-        false,
-        false,
-        sessionToken
-      );
+    const sessionToken = Math.random().toString(36).substring(2, 15);
+    const transferCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-      this.socketToPlayerMap.set(socketId, { roomId: room.id, playerId: player.id, sessionToken });
-      this.broadcastGameState(room.id);
+    room.engine.addPlayer(playerId, playerName, false, false, sessionToken, transferCode);
+    this.socketToPlayerMap.set(playerId, { roomId: room.id, playerId });
+    socket.join(room.id);
 
-      return { success: true, sessionToken, playerId: player.id };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Could not join room' };
-    }
+    this.broadcastGameState(room.id);
+    return { roomId: room.id, sessionToken, playerId };
+  }
+
+  public reconnectSeat(
+    socket: Socket,
+    roomId: string,
+    sessionToken: string
+  ): boolean {
+    const room = this.rooms.get(roomId.toUpperCase());
+    if (!room) return false;
+
+    const existingPlayer = room.engine.state.players.find(
+      p => p.sessionToken === sessionToken
+    );
+    if (!existingPlayer) return false;
+
+    this.socketToPlayerMap.delete(existingPlayer.id);
+    existingPlayer.id = socket.id;
+    existingPlayer.isConnected = true;
+    this.socketToPlayerMap.set(socket.id, { roomId: room.id, playerId: socket.id });
+    socket.join(room.id);
+    this.broadcastGameState(room.id);
+    return true;
   }
 
   public transferSeat(
-    transferCode: string,
-    socketId: string
-  ): { success: boolean; roomId?: string; sessionToken?: string; playerId?: string; error?: string } {
-    const code = transferCode.trim().toUpperCase();
-    for (const [roomId, room] of this.rooms.entries()) {
-      const sessionToken = this.generateSessionToken();
-      const player = room.engine.transferSeat(code, socketId, sessionToken);
-      if (player) {
-        this.socketToPlayerMap.set(socketId, { roomId, playerId: player.id, sessionToken });
-        this.broadcastGameState(roomId);
-        return { success: true, roomId, sessionToken, playerId: player.id };
+    socket: Socket,
+    transferCode: string
+  ): { roomId: string; sessionToken: string; playerId: string } | null {
+    for (const room of this.rooms.values()) {
+      const targetPlayer = room.engine.state.players.find(
+        p => p.transferCode === transferCode.toUpperCase()
+      );
+      if (targetPlayer) {
+        const newSessionToken = Math.random().toString(36).substring(2, 15);
+        this.socketToPlayerMap.delete(targetPlayer.id);
+        targetPlayer.id = socket.id;
+        targetPlayer.sessionToken = newSessionToken;
+        targetPlayer.isConnected = true;
+
+        this.socketToPlayerMap.set(socket.id, { roomId: room.id, playerId: socket.id });
+        socket.join(room.id);
+        this.broadcastGameState(room.id);
+
+        return { roomId: room.id, sessionToken: newSessionToken, playerId: socket.id };
       }
     }
-    return { success: false, error: 'Invalid or expired transfer code' };
+    return null;
   }
 
-  public addBot(roomId: string, requesterSocketId: string): { success: boolean; error?: string } {
+  public addBot(roomId: string, requesterSocketId: string): void {
     const room = this.rooms.get(roomId);
-    if (!room) return { success: false, error: 'Room not found' };
+    if (!room) throw new Error('Room not found');
 
     const host = room.engine.state.players.find(p => p.id === requesterSocketId);
     if (!host || !host.isHost) {
-      return { success: false, error: 'Only host can add bots' };
+      throw new Error('Only the host can add bots');
+    }
+
+    if (room.engine.state.phase !== 'LOBBY') {
+      throw new Error('Cannot add bots after game start');
     }
 
     if (room.engine.state.players.length >= 12) {
-      return { success: false, error: 'Maximum 12 players' };
+      throw new Error('Maximum 12 players allowed');
     }
 
-    const botIndex = room.engine.state.players.filter(p => p.isBot).length;
-    const botName = BOT_NAMES[botIndex % BOT_NAMES.length];
-    const botId = `bot_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+    const botCount = room.engine.state.players.filter(p => p.isBot).length + 1;
+    const botId = `bot_${Math.random().toString(36).substring(2, 9)}`;
+    const botNames = ['Karan (AI)', 'Pooja (AI)', 'Amit (AI)', 'Neha (AI)', 'Rohan (AI)', 'Simran (AI)', 'Vikram (AI)', 'Ananya (AI)'];
+    const botName = botNames[(botCount - 1) % botNames.length] || `Bot ${botCount}`;
 
-    room.engine.addPlayer(botId, botName, `avatar_${botId}`, false, true, `bot_token_${botId}`);
+    room.engine.addPlayer(botId, botName, false, true, `bot_token_${botId}`, '');
     this.broadcastGameState(roomId);
-    return { success: true };
   }
 
   public removeBot(roomId: string, botId: string, requesterSocketId: string): void {
     const room = this.rooms.get(roomId);
-    if (!room) return;
+    if (!room) throw new Error('Room not found');
 
     const host = room.engine.state.players.find(p => p.id === requesterSocketId);
-    if (!host || !host.isHost) return;
+    if (!host || !host.isHost) {
+      throw new Error('Only the host can remove bots');
+    }
 
     room.engine.removePlayer(botId);
     this.broadcastGameState(roomId);
@@ -172,18 +187,21 @@ export class RoomManager {
 
   public kickPlayer(roomId: string, targetPlayerId: string, requesterSocketId: string): void {
     const room = this.rooms.get(roomId);
-    if (!room) return;
+    if (!room) throw new Error('Room not found');
 
     const host = room.engine.state.players.find(p => p.id === requesterSocketId);
-    if (!host || !host.isHost) return;
+    if (!host || !host.isHost) {
+      throw new Error('Only the host can kick players');
+    }
 
     room.engine.removePlayer(targetPlayerId);
+    this.socketToPlayerMap.delete(targetPlayerId);
     this.broadcastGameState(roomId);
   }
 
   public startGame(roomId: string, requesterSocketId: string): void {
     const room = this.rooms.get(roomId);
-    if (!room) return;
+    if (!room) throw new Error('Room not found');
 
     const host = room.engine.state.players.find(p => p.id === requesterSocketId);
     if (!host || !host.isHost) {
@@ -228,7 +246,7 @@ export class RoomManager {
       if (result.winner) {
         this.io.to(session.roomId).emit('chatMessage', {
           sender: 'System',
-          text: `👑 ${result.winner.playerName} won with ${result.winner.card.rank}${result.winner.card.suit}`,
+          text: `🏆 ${result.winner.playerName} won with ${result.winner.card.rank}${result.winner.card.suit}`,
           timestamp: Date.now(),
           isSystem: true,
         });
@@ -236,17 +254,21 @@ export class RoomManager {
       }
 
       if (result.roundComplete) {
-        // Hold 2 seconds before showing round summary
+        // Hold completed trick on table for 2.5s before transitioning to ROUND_SUMMARY
         setTimeout(() => {
-          this.broadcastGameState(session.roomId);
-          if (result.gameComplete) {
-            this.io.to(session.roomId).emit('soundTrigger', 'gameWin');
-          } else {
-            this.io.to(session.roomId).emit('soundTrigger', 'roundSuccess');
+          const activeRoom = this.rooms.get(session.roomId);
+          if (activeRoom) {
+            const finalResult = activeRoom.engine.finalizeRound();
+            this.broadcastGameState(session.roomId);
+            if (finalResult.gameComplete) {
+              this.io.to(session.roomId).emit('soundTrigger', 'gameWin');
+            } else {
+              this.io.to(session.roomId).emit('soundTrigger', 'roundSuccess');
+            }
           }
-        }, 2000);
+        }, 2500);
       } else {
-        // Hold completed trick on table for 2 seconds so players can see the winner highlight
+        // Hold completed trick on table for 2s so players can see the winner highlight
         setTimeout(() => {
           const activeRoom = this.rooms.get(session.roomId);
           if (activeRoom && activeRoom.engine.state.phase === 'PLAYING') {
@@ -356,7 +378,7 @@ export class RoomManager {
             if (result.winner) {
               this.io.to(roomId).emit('chatMessage', {
                 sender: 'System',
-                text: `👑 ${result.winner.playerName} won with ${result.winner.card.rank}${result.winner.card.suit}`,
+                text: `🏆 ${result.winner.playerName} won with ${result.winner.card.rank}${result.winner.card.suit}`,
                 timestamp: Date.now(),
                 isSystem: true,
               });
@@ -365,13 +387,17 @@ export class RoomManager {
 
             if (result.roundComplete) {
               setTimeout(() => {
-                this.broadcastGameState(roomId);
-                if (result.gameComplete) {
-                  this.io.to(roomId).emit('soundTrigger', 'gameWin');
-                } else {
-                  this.io.to(roomId).emit('soundTrigger', 'roundSuccess');
+                const refreshedRoom = this.rooms.get(roomId);
+                if (refreshedRoom) {
+                  const finalResult = refreshedRoom.engine.finalizeRound();
+                  this.broadcastGameState(roomId);
+                  if (finalResult.gameComplete) {
+                    this.io.to(roomId).emit('soundTrigger', 'gameWin');
+                  } else {
+                    this.io.to(roomId).emit('soundTrigger', 'roundSuccess');
+                  }
                 }
-              }, 2000);
+              }, 2500);
             } else {
               setTimeout(() => {
                 const refreshedRoom = this.rooms.get(roomId);

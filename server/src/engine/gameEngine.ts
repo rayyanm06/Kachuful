@@ -1,39 +1,36 @@
+import { Card, createDeck, shuffleDeck, sortHand, Suit } from './deck.js';
 import {
-  Card,
-  Suit,
-  createDeck,
-  shuffleDeck,
-  sortHand,
-} from './deck.js';
-import {
+  PlayedCard,
   generateRoundsStructure,
   getTrumpSuit,
   getValidBids,
   getLegalCards,
   determineTrickWinner,
   calculatePlayerRoundScore,
-  isBlindRound,
-  PlayedCard,
 } from './rules.js';
 
 export interface Player {
   id: string;
   name: string;
-  avatarSeed: string;
   seatIndex: number;
   isHost: boolean;
   isBot: boolean;
-  isConnected: boolean;
   score: number;
   currentBid: number | null;
   tricksWon: number;
+  isConnected: boolean;
   sessionToken: string;
   transferCode: string;
 }
 
-export type GamePhase = 'LOBBY' | 'DEALING' | 'BIDDING' | 'PLAYING' | 'TRICK_RESOLVING' | 'ROUND_SUMMARY' | 'GAME_OVER';
+export type GamePhase =
+  | 'LOBBY'
+  | 'BIDDING'
+  | 'PLAYING'
+  | 'ROUND_SUMMARY'
+  | 'GAME_OVER';
 
-export interface Trick {
+export interface TrickState {
   trickNumber: number;
   leadSuit: Suit | null;
   cards: PlayedCard[];
@@ -57,11 +54,6 @@ export interface RoundHistory {
   scores: RoundScore[];
 }
 
-export interface GameSettings {
-  maxCardsPerRound: number;
-  customMaxCards?: number;
-}
-
 export interface GameState {
   roomId: string;
   phase: GamePhase;
@@ -73,22 +65,15 @@ export interface GameState {
   roundsStructure: number[];
   currentCardsCount: number;
   trumpSuit: Suit;
-  isBlind: boolean;
-  currentTrick: Trick;
-  completedTricks: Trick[];
+  currentTrick: TrickState;
+  completedTricks: TrickState[];
   roundScores: RoundHistory[];
-  settings: GameSettings;
   hookBidForDealer: number | null;
-  roundStartTime?: number;
-  lastTrickWinner?: {
-    playerId: string;
-    playerName: string;
-    card: Card;
-  } | null;
+  lastTrickWinner?: { playerId: string; playerName: string; card: Card };
 }
 
 export interface ClientGameState extends Omit<GameState, 'players'> {
-  players: Array<Omit<Player, 'sessionToken' | 'transferCode'>>;
+  players: Omit<Player, 'sessionToken' | 'transferCode'>[];
   myPlayerId: string;
   myTransferCode: string;
   myHand: Card[];
@@ -102,8 +87,10 @@ export interface ClientGameState extends Omit<GameState, 'players'> {
 export class GameEngine {
   public state: GameState;
   private playerHands: Map<string, Card[]> = new Map();
+  public customMaxCards?: number;
 
   constructor(roomId: string, customMaxCards?: number) {
+    this.customMaxCards = customMaxCards;
     this.state = {
       roomId,
       phase: 'LOBBY',
@@ -115,7 +102,6 @@ export class GameEngine {
       roundsStructure: [],
       currentCardsCount: 0,
       trumpSuit: 'S',
-      isBlind: true,
       currentTrick: {
         trickNumber: 1,
         leadSuit: null,
@@ -125,58 +111,37 @@ export class GameEngine {
       },
       completedTricks: [],
       roundScores: [],
-      settings: {
-        maxCardsPerRound: 8,
-        customMaxCards,
-      },
       hookBidForDealer: null,
-      lastTrickWinner: null,
     };
-  }
-
-  private generateTransferCode(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = '';
-    for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-  }
-
-  public setCustomMaxCards(maxCards: number): void {
-    if (this.state.phase === 'LOBBY') {
-      this.state.settings.customMaxCards = Math.max(1, Math.min(8, maxCards));
-    }
   }
 
   public addPlayer(
     id: string,
     name: string,
-    avatarSeed: string,
-    isHost: boolean = false,
-    isBot: boolean = false,
-    sessionToken: string = ''
+    isHost = false,
+    isBot = false,
+    sessionToken: string,
+    transferCode: string
   ): Player {
-    if (this.state.players.length >= 12) {
-      throw new Error('Room is full (max 12 players)');
-    }
     if (this.state.phase !== 'LOBBY') {
       throw new Error('Game already started');
+    }
+    if (this.state.players.length >= 12) {
+      throw new Error('Room is full (max 12 players)');
     }
 
     const player: Player = {
       id,
       name,
-      avatarSeed,
       seatIndex: this.state.players.length,
       isHost,
       isBot,
-      isConnected: true,
       score: 0,
       currentBid: null,
       tricksWon: 0,
+      isConnected: true,
       sessionToken,
-      transferCode: this.generateTransferCode(),
+      transferCode,
     };
 
     this.state.players.push(player);
@@ -185,56 +150,29 @@ export class GameEngine {
 
   public removePlayer(playerId: string): void {
     if (this.state.phase !== 'LOBBY') {
-      const player = this.state.players.find(p => p.id === playerId);
-      if (player) {
-        player.isConnected = false;
-      }
-      return;
+      throw new Error('Cannot remove players after game has started');
     }
-
     this.state.players = this.state.players.filter(p => p.id !== playerId);
     this.state.players.forEach((p, idx) => {
       p.seatIndex = idx;
     });
-
-    if (!this.state.players.some(p => p.isHost) && this.state.players.length > 0) {
-      const nextReal = this.state.players.find(p => !p.isBot) || this.state.players[0];
-      nextReal.isHost = true;
+    if (this.state.players.length > 0 && !this.state.players.some(p => p.isHost)) {
+      this.state.players[0].isHost = true;
     }
-  }
-
-  public reconnectPlayer(sessionToken: string, newSocketId: string): Player | null {
-    const player = this.state.players.find(p => p.sessionToken === sessionToken);
-    if (!player) return null;
-
-    player.id = newSocketId;
-    player.isConnected = true;
-    return player;
-  }
-
-  public transferSeat(transferCode: string, newSocketId: string, newSessionToken: string): Player | null {
-    const player = this.state.players.find(p => p.transferCode.toUpperCase() === transferCode.toUpperCase());
-    if (!player) return null;
-
-    player.id = newSocketId;
-    player.sessionToken = newSessionToken;
-    player.isConnected = true;
-    player.transferCode = this.generateTransferCode();
-    return player;
   }
 
   public startGame(): void {
     if (this.state.players.length < 2) {
-      throw new Error('Need at least 2 players to start Kachuful');
-    }
-    if (this.state.players.length > 12) {
-      throw new Error('Maximum 12 players allowed');
+      throw new Error('Need at least 2 players to start game');
     }
 
-    const numPlayers = this.state.players.length;
-    this.state.roundsStructure = generateRoundsStructure(numPlayers, this.state.settings.customMaxCards);
-    this.state.totalRounds = this.state.roundsStructure.length;
-    this.state.settings.maxCardsPerRound = Math.max(...this.state.roundsStructure);
+    const rounds = generateRoundsStructure(
+      this.state.players.length,
+      this.customMaxCards
+    );
+
+    this.state.roundsStructure = rounds;
+    this.state.totalRounds = rounds.length;
     this.state.roundIndex = 0;
     this.state.dealerIndex = 0;
     this.state.roundScores = [];
@@ -246,13 +184,12 @@ export class GameEngine {
     this.startRound(0);
   }
 
-  public startRound(roundIdx: number): void {
-    this.state.roundIndex = roundIdx;
-    this.state.currentCardsCount = this.state.roundsStructure[roundIdx];
-    this.state.trumpSuit = getTrumpSuit(roundIdx);
-    this.state.isBlind = isBlindRound(roundIdx); // ONLY round 0 is blind!
-    this.state.lastTrickWinner = null;
+  public startRound(roundIndex: number): void {
+    this.state.roundIndex = roundIndex;
+    this.state.currentCardsCount = this.state.roundsStructure[roundIndex];
+    this.state.trumpSuit = getTrumpSuit(roundIndex);
     this.state.completedTricks = [];
+    this.state.lastTrickWinner = undefined;
     this.state.currentTrick = {
       trickNumber: 1,
       leadSuit: null,
@@ -260,22 +197,25 @@ export class GameEngine {
       winnerId: null,
       winnerName: null,
     };
-    this.state.roundStartTime = Date.now();
 
     for (const p of this.state.players) {
       p.currentBid = null;
       p.tricksWon = 0;
     }
 
-    // Deal cards
-    const deck = shuffleDeck(createDeck());
-    this.playerHands.clear();
+    // Calculate required decks (e.g. 8 players * 8 cards = 64 cards -> 2 decks needed)
+    const totalCardsNeeded = this.state.players.length * this.state.currentCardsCount;
+    const numDecks = Math.max(1, Math.ceil(totalCardsNeeded / 52));
+    const deck = shuffleDeck(createDeck(numDecks));
 
-    for (let i = 0; i < this.state.players.length; i++) {
-      const p = this.state.players[i];
+    this.playerHands.clear();
+    for (const p of this.state.players) {
       const hand: Card[] = [];
       for (let c = 0; c < this.state.currentCardsCount; c++) {
-        hand.push(deck.pop()!);
+        const card = deck.pop();
+        if (card) {
+          hand.push(card);
+        }
       }
       this.playerHands.set(p.id, sortHand(hand));
     }
@@ -390,19 +330,10 @@ export class GameEngine {
       this.state.completedTricks.push({ ...this.state.currentTrick });
 
       const roundComplete = this.state.completedTricks.length === this.state.currentCardsCount;
-      let gameComplete = false;
+      const gameComplete = roundComplete && this.state.roundIndex >= this.state.totalRounds - 1;
 
-      if (roundComplete) {
-        this.finishRound();
-        if (this.state.roundIndex >= this.state.totalRounds - 1) {
-          this.state.phase = 'GAME_OVER';
-          gameComplete = true;
-        } else {
-          this.state.phase = 'ROUND_SUMMARY';
-        }
-      } else {
-        this.state.currentTurnIndex = winnerPlayer.seatIndex;
-      }
+      // Note: We leave phase as 'PLAYING' until finalizeRound() is invoked after a 2-second visual delay
+      this.state.currentTurnIndex = winnerPlayer.seatIndex;
 
       return { trickComplete: true, roundComplete, gameComplete, winner };
     } else {
@@ -420,6 +351,17 @@ export class GameEngine {
       winnerId: null,
       winnerName: null,
     };
+  }
+
+  public finalizeRound(): { gameComplete: boolean } {
+    this.finishRound();
+    const gameComplete = this.state.roundIndex >= this.state.totalRounds - 1;
+    if (gameComplete) {
+      this.state.phase = 'GAME_OVER';
+    } else {
+      this.state.phase = 'ROUND_SUMMARY';
+    }
+    return { gameComplete };
   }
 
   private finishRound(): void {
@@ -443,7 +385,7 @@ export class GameEngine {
       roundNumber: this.state.roundIndex + 1,
       cardsCount: this.state.currentCardsCount,
       trumpSuit: this.state.trumpSuit,
-      dealerId: this.state.players[this.state.dealerIndex].id,
+      dealerId: this.state.players[this.state.dealerIndex]?.id || '',
       scores,
     };
 
@@ -469,8 +411,6 @@ export class GameEngine {
 
   public getClientGameState(playerId: string): ClientGameState {
     const rawHand = this.getPlayerHand(playerId);
-    // ONLY Round 0 (1 card) during bidding is blind!
-    // In rounds 1, 2, 3, etc. (2 cards, 3 cards...), isBlindBidding is FALSE and rawHand is sent!
     const isBlindBidding = this.state.roundIndex === 0 && this.state.phase === 'BIDDING';
     const myHand = isBlindBidding ? [] : rawHand;
 

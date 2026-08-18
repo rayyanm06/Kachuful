@@ -41,15 +41,22 @@ export const SUIT_SYMBOLS: Record<Suit, string> = {
   H: '♥',
 };
 
-export function createDeck(): Card[] {
+/**
+ * Creates one or more standard 52-card decks.
+ * If 7-12 players are playing with high card counts (e.g. 8 cards * 8 players = 64 cards),
+ * numDecks will be 2 or more so the deck never runs out.
+ */
+export function createDeck(numDecks: number = 1): Card[] {
   const deck: Card[] = [];
-  for (const suit of SUITS) {
-    for (const rank of RANKS) {
-      deck.push({
-        suit,
-        rank,
-        id: `${suit}_${rank}`,
-      });
+  for (let d = 0; d < numDecks; d++) {
+    for (const suit of SUITS) {
+      for (const rank of RANKS) {
+        deck.push({
+          suit,
+          rank,
+          id: d === 0 ? `${suit}_${rank}` : `${suit}_${rank}_d${d}`,
+        });
+      }
     }
   }
   return deck;
@@ -64,12 +71,19 @@ export function shuffleDeck(deck: Card[]): Card[] {
   return shuffled;
 }
 
-export function sortHand(hand: Card[]): Card[] {
+export function sortHand(hand: Card[], sortBy: 'suit' | 'rank' = 'suit'): Card[] {
   const suitOrder: Record<Suit, number> = { S: 0, D: 1, C: 2, H: 3 };
   return [...hand].sort((a, b) => {
-    if (a.suit !== b.suit) {
+    if (sortBy === 'suit') {
+      if (a.suit !== b.suit) {
+        return suitOrder[a.suit] - suitOrder[b.suit];
+      }
+      return RANK_VALUES[a.rank] - RANK_VALUES[b.rank];
+    } else {
+      if (a.rank !== b.rank) {
+        return RANK_VALUES[b.rank] - RANK_VALUES[a.rank]; // High to low
+      }
       return suitOrder[a.suit] - suitOrder[b.suit];
     }
-    return RANK_VALUES[a.rank] - RANK_VALUES[b.rank];
   });
 }
