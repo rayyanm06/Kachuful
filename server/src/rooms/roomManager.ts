@@ -46,6 +46,9 @@ export class RoomManager {
     this.socketToPlayerMap.set(socket.id, { roomId, playerId });
     socket.join(roomId);
 
+    // Broadcast initial LOBBY state so client transitions off landing page
+    setTimeout(() => this.broadcastGameState(roomId), 50);
+
     return { roomId, sessionToken, playerId };
   }
 
