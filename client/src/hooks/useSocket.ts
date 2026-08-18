@@ -4,7 +4,7 @@ import { ClientGameState, ChatMessage } from '../types/index.js';
 
 const SOCKET_SERVER_URL =
   import.meta.env.VITE_SERVER_URL ||
-  (typeof window !== 'undefined' ? `http://${window.location.hostname}:3001` : 'http://localhost:3001');
+  (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3001` : 'http://localhost:3001');
 
 const STORAGE_KEYS = {
   ROOM_ID: 'kachuful_room_id',
