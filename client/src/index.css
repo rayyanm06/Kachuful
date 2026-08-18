@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #f4f7f5;
+  background-image: 
+    radial-gradient(ellipse 70% 50% at 50% -10%, rgba(16, 185, 129, 0.08), rgba(255, 255, 255, 0)),
+    radial-gradient(ellipse 50% 50% at 50% 110%, rgba(13, 148, 136, 0.05), rgba(255, 255, 255, 0));
+  background-attachment: fixed;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  color: #0f172a;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 0.8);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(16, 185, 129, 0.4);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.7);
+}
+
+/* Playing card shadow and hover */
+.playing-card-shadow {
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.12), 0 2px 6px -1px rgba(0, 0, 0, 0.08);
+}
+.playing-card-shadow:hover {
+  box-shadow: 0 12px 24px -4px rgba(16, 185, 129, 0.3), 0 6px 12px -2px rgba(0, 0, 0, 0.1);
+}
+
+/* Felt table */
+.light-felt-table {
+  background: radial-gradient(circle at 50% 50%, #0d5f4c 0%, #084739 65%, #053329 100%);
+  box-shadow: 
+    inset 0 0 60px rgba(0, 0, 0, 0.4),
+    0 10px 30px rgba(0, 0, 0, 0.15),
+    0 0 0 4px #0b5b49;
+}
+
+@keyframes cardPlay {
+  0% { transform: scale(0.85) translateY(16px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.animate-card-play {
+  animation: cardPlay 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes bounceShort {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-4px); }
+}
+
+.animate-bounce-short {
+  animation: bounceShort 0.5s ease-in-out infinite alternate;
+}
