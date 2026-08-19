@@ -63,7 +63,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               Everyone's game
             </p>
             <h1 className="text-2xl sm:text-3xl font-black text-slate-900 mt-1 leading-none tracking-tight">
-              Kachuful by Rayyan
+              Kachuful
             </h1>
           </div>
         </div>
@@ -179,7 +179,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             type="text"
             required
             maxLength={16}
-            placeholder="Your name (e.g. Rayyan)"
+            placeholder="Your name"
             value={playerName}
             onChange={(e) => {
               setPlayerName(e.target.value);
