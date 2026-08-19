@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ClientGameState, Card, Suit, RANK_VALUES } from '../../types/index.js';
 import { PlayingCard } from '../ui/PlayingCard.js';
 import { SuitIcon } from '../ui/SuitIcon.js';
@@ -38,6 +38,30 @@ export const PortableTable: React.FC<PortableTableProps> = ({
     lastTrickWinner,
     isSpectator,
   } = gameState;
+
+  // Dynamically determine which played card is currently leading/winning the active trick
+  const currentWinningCardKey = useMemo(() => {
+    if (!currentTrick.cards || currentTrick.cards.length === 0) return null;
+    const leadSuit = currentTrick.cards[0].card.suit;
+    const trumpPlays = currentTrick.cards.filter((p) => p.card.suit === trumpSuit);
+    if (trumpPlays.length > 0) {
+      let best = trumpPlays[0];
+      for (let i = 1; i < trumpPlays.length; i++) {
+        if (RANK_VALUES[trumpPlays[i].card.rank] > RANK_VALUES[best.card.rank]) {
+          best = trumpPlays[i];
+        }
+      }
+      return `${best.playerId}_${best.card.id}`;
+    }
+    const leadPlays = currentTrick.cards.filter((p) => p.card.suit === leadSuit);
+    let best = leadPlays[0];
+    for (let i = 1; i < leadPlays.length; i++) {
+      if (RANK_VALUES[leadPlays[i].card.rank] > RANK_VALUES[best.card.rank]) {
+        best = leadPlays[i];
+      }
+    }
+    return `${best.playerId}_${best.card.id}`;
+  }, [currentTrick.cards, trumpSuit]);
 
   // Sorting state for player hand ('suit' = Suit & Rank, 'rank' = Rank High-to-Low)
   const [sortBy, setSortBy] = useState<'suit' | 'rank'>('suit');
@@ -195,9 +219,7 @@ export const PortableTable: React.FC<PortableTableProps> = ({
               </div>
             ) : (
               currentTrick.cards.map((played) => {
-                const isWinner =
-                  currentTrick.winnerId === played.playerId ||
-                  lastTrickWinner?.playerId === played.playerId;
+                const isWinner = currentWinningCardKey === `${played.playerId}_${played.card.id}`;
 
                 return (
                   <div
@@ -213,8 +235,8 @@ export const PortableTable: React.FC<PortableTableProps> = ({
                     >
                       <PlayingCard card={played.card} size="md" />
                       {isWinner && (
-                        <div className="absolute -top-2.5 -right-2.5 w-6 h-6 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shadow font-black text-xs">
-                          👑
+                        <div className="absolute -top-2.5 -right-2.5 w-6 h-6 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shadow-md font-black text-xs z-30 ring-2 ring-slate-950/20">
+                          <Crown className="w-3.5 h-3.5 fill-slate-950 text-slate-950" />
                         </div>
                       )}
                     </div>
@@ -231,7 +253,7 @@ export const PortableTable: React.FC<PortableTableProps> = ({
         {/* 2.5-SECOND TRICK WINNER BANNER */}
         {lastTrickWinner && currentTrick.cards.length === 0 && !isRoundSummary && (
           <div className="absolute bottom-3 z-20 bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 px-4 py-1.5 rounded-full text-xs font-black shadow-xl border border-amber-200 flex items-center gap-2 animate-bounce-short">
-            <span>👑 {lastTrickWinner.playerName} won trick with</span>
+            <span>🏆 {lastTrickWinner.playerName} won trick with</span>
             <span className="font-mono bg-black/20 px-1.5 py-0.5 rounded text-[11px]">
               {lastTrickWinner.card.rank}{lastTrickWinner.card.suit}
             </span>

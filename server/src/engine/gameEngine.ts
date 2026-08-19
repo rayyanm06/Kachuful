@@ -314,6 +314,11 @@ export class GameEngine {
 
     this.state.currentTrick.cards.push(playedCard);
 
+    // Dynamically update who is currently leading the trick in real time
+    const currentLeader = determineTrickWinner(this.state.currentTrick.cards, this.state.trumpSuit);
+    this.state.currentTrick.winnerId = currentLeader.playerId;
+    this.state.currentTrick.winnerName = currentLeader.playerName;
+
     if (this.state.currentTrick.cards.length === this.state.players.length) {
       const winner = determineTrickWinner(this.state.currentTrick.cards, this.state.trumpSuit);
       const winnerPlayer = this.state.players.find(p => p.id === winner.playerId)!;
