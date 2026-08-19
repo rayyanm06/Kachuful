@@ -148,6 +148,38 @@ export class GameEngine {
     return player;
   }
 
+  public updatePlayerId(oldPlayerId: string, newPlayerId: string): void {
+    const player = this.state.players.find(p => p.id === oldPlayerId);
+    if (player) {
+      player.id = newPlayerId;
+      player.isConnected = true;
+    }
+
+    // Transfer active hand in current round
+    if (this.playerHands.has(oldPlayerId)) {
+      const hand = this.playerHands.get(oldPlayerId)!;
+      this.playerHands.delete(oldPlayerId);
+      this.playerHands.set(newPlayerId, hand);
+    }
+
+    // Transfer any cards played in current trick
+    for (const pc of this.state.currentTrick.cards) {
+      if (pc.playerId === oldPlayerId) {
+        pc.playerId = newPlayerId;
+      }
+    }
+
+    // Transfer current trick winnerId
+    if (this.state.currentTrick.winnerId === oldPlayerId) {
+      this.state.currentTrick.winnerId = newPlayerId;
+    }
+
+    // Transfer last trick winner
+    if (this.state.lastTrickWinner && this.state.lastTrickWinner.playerId === oldPlayerId) {
+      this.state.lastTrickWinner.playerId = newPlayerId;
+    }
+  }
+
   public removePlayer(playerId: string): void {
     if (this.state.phase !== 'LOBBY') {
       throw new Error('Cannot remove players after game has started');

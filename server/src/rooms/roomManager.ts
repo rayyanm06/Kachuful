@@ -63,28 +63,49 @@ export class RoomManager {
       throw new Error('Room not found');
     }
 
-    const playerId = socket.id;
+    const cleanName = playerName.trim();
+    if (!cleanName) {
+      throw new Error('Player name is required');
+    }
 
-    // Check if player is reconnecting with an existing sessionToken
+    // 1. Check if player is reconnecting with an existing sessionToken
     if (existingSessionToken) {
       const existingPlayer = room.engine.state.players.find(
         p => p.sessionToken === existingSessionToken
       );
 
       if (existingPlayer) {
-        // Swap socket mapping to the reconnected socket
         this.socketToPlayerMap.delete(existingPlayer.id);
-        existingPlayer.id = playerId;
-        existingPlayer.isConnected = true;
-        this.socketToPlayerMap.set(playerId, { roomId: room.id, playerId });
+        room.engine.updatePlayerId(existingPlayer.id, socket.id);
+        this.socketToPlayerMap.set(socket.id, { roomId: room.id, playerId: socket.id });
         socket.join(room.id);
         this.broadcastGameState(room.id);
-        return { roomId: room.id, sessionToken: existingSessionToken, playerId };
+        return { roomId: room.id, sessionToken: existingSessionToken, playerId: socket.id };
       }
     }
 
+    // 2. Check if player with the same name already exists in the room
+    const existingByName = room.engine.state.players.find(
+      p => p.name.trim().toLowerCase() === cleanName.toLowerCase()
+    );
+
+    if (existingByName) {
+      // Reclaim seat if game is running OR player is disconnected
+      if (room.engine.state.phase !== 'LOBBY' || !existingByName.isConnected) {
+        this.socketToPlayerMap.delete(existingByName.id);
+        room.engine.updatePlayerId(existingByName.id, socket.id);
+        this.socketToPlayerMap.set(socket.id, { roomId: room.id, playerId: socket.id });
+        socket.join(room.id);
+        this.broadcastGameState(room.id);
+        return { roomId: room.id, sessionToken: existingByName.sessionToken, playerId: socket.id };
+      } else {
+        throw new Error(`A player named "${existingByName.name}" is already connected in this room.`);
+      }
+    }
+
+    // 3. New player joining
     if (room.engine.state.phase !== 'LOBBY') {
-      throw new Error('Game already started');
+      throw new Error('Game already started. Only players already in the room can rejoin.');
     }
 
     if (room.engine.state.players.length >= 12) {
@@ -94,12 +115,12 @@ export class RoomManager {
     const sessionToken = Math.random().toString(36).substring(2, 15);
     const transferCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-    room.engine.addPlayer(playerId, playerName, false, false, sessionToken, transferCode);
-    this.socketToPlayerMap.set(playerId, { roomId: room.id, playerId });
+    room.engine.addPlayer(socket.id, cleanName, false, false, sessionToken, transferCode);
+    this.socketToPlayerMap.set(socket.id, { roomId: room.id, playerId: socket.id });
     socket.join(room.id);
 
     this.broadcastGameState(room.id);
-    return { roomId: room.id, sessionToken, playerId };
+    return { roomId: room.id, sessionToken, playerId: socket.id };
   }
 
   public reconnectSeat(
@@ -116,8 +137,7 @@ export class RoomManager {
     if (!existingPlayer) return false;
 
     this.socketToPlayerMap.delete(existingPlayer.id);
-    existingPlayer.id = socket.id;
-    existingPlayer.isConnected = true;
+    room.engine.updatePlayerId(existingPlayer.id, socket.id);
     this.socketToPlayerMap.set(socket.id, { roomId: room.id, playerId: socket.id });
     socket.join(room.id);
     this.broadcastGameState(room.id);
@@ -128,24 +148,23 @@ export class RoomManager {
     socket: Socket,
     transferCode: string
   ): { roomId: string; sessionToken: string; playerId: string } | null {
-    for (const room of this.rooms.values()) {
-      const targetPlayer = room.engine.state.players.find(
-        p => p.transferCode === transferCode.toUpperCase()
+    const cleanCode = transferCode.trim().toUpperCase();
+
+    for (const [roomId, room] of this.rooms.entries()) {
+      const player = room.engine.state.players.find(
+        p => p.transferCode.toUpperCase() === cleanCode
       );
-      if (targetPlayer) {
-        const newSessionToken = Math.random().toString(36).substring(2, 15);
-        this.socketToPlayerMap.delete(targetPlayer.id);
-        targetPlayer.id = socket.id;
-        targetPlayer.sessionToken = newSessionToken;
-        targetPlayer.isConnected = true;
 
-        this.socketToPlayerMap.set(socket.id, { roomId: room.id, playerId: socket.id });
-        socket.join(room.id);
-        this.broadcastGameState(room.id);
-
-        return { roomId: room.id, sessionToken: newSessionToken, playerId: socket.id };
+      if (player) {
+        this.socketToPlayerMap.delete(player.id);
+        room.engine.updatePlayerId(player.id, socket.id);
+        this.socketToPlayerMap.set(socket.id, { roomId, playerId: socket.id });
+        socket.join(roomId);
+        this.broadcastGameState(roomId);
+        return { roomId, sessionToken: player.sessionToken, playerId: socket.id };
       }
     }
+
     return null;
   }
 
