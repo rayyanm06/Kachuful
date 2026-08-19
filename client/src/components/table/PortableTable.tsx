@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { ClientGameState, Card, Suit, RANK_VALUES } from '../../types/index.js';
 import { PlayingCard } from '../ui/PlayingCard.js';
 import { SuitIcon } from '../ui/SuitIcon.js';
-import { Sparkles, Bot, Crown, ArrowUpDown, Lock, Play, WifiOff, Eye } from 'lucide-react';
+import { Sparkles, Bot, Crown, ArrowUpDown, Lock, Play, WifiOff, Eye, EyeOff } from 'lucide-react';
 
 interface PortableTableProps {
   gameState: ClientGameState;
@@ -65,6 +65,7 @@ export const PortableTable: React.FC<PortableTableProps> = ({
 
   // Sorting state for player hand ('suit' = Suit & Rank, 'rank' = Rank High-to-Low)
   const [sortBy, setSortBy] = useState<'suit' | 'rank'>('suit');
+  const [isHandHidden, setIsHandHidden] = useState<boolean>(false);
 
   const myPlayer = players.find((p) => p.id === myPlayerId);
   const isDealer = myPlayer?.seatIndex === dealerIndex;
@@ -325,8 +326,8 @@ export const PortableTable: React.FC<PortableTableProps> = ({
           {!isBlindBidding && (
             <div className="w-full flex flex-col items-center">
               
-              {/* Hand Header: Turn Indicator + Order Hand Button */}
-              <div className="w-full max-w-2xl flex items-center justify-between px-2 mb-1.5">
+                            {/* Hand Header: Turn Indicator + Privacy Hide / Flip Button + Order Hand Button */}
+              <div className="w-full max-w-2xl flex flex-wrap items-center justify-between gap-1.5 px-2 mb-1.5">
                 {isPlayingPhase && isMyTurn ? (
                   <div className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
@@ -338,26 +339,66 @@ export const PortableTable: React.FC<PortableTableProps> = ({
                     )}
                   </div>
                 ) : (
-                  <div className="text-xs font-bold text-slate-600">Your Hand</div>
+                  <div className="text-xs font-bold text-slate-600">Your Hand ({sortedHand.length})</div>
                 )}
 
-                {/* Order Hand Toggle Button */}
-                {sortedHand.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={toggleSort}
-                    className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold shadow-sm flex items-center gap-1.5 transition hover:scale-105 active:scale-95"
-                  >
-                    <ArrowUpDown className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>{sortBy === 'suit' ? 'Sorted by Suit ♠♦♣♥' : 'Sorted by Rank (A..2)'}</span>
-                  </button>
-                )}
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  {/* Privacy Hide / Flip Cards Button */}
+                  {sortedHand.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsHandHidden((prev) => !prev)}
+                      className={`px-2.5 py-1 rounded-lg border text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all duration-150 active:scale-95 ${
+                        isHandHidden
+                          ? 'bg-amber-100 hover:bg-amber-200 border-amber-400 text-amber-900 ring-2 ring-amber-400/50'
+                          : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-700'
+                      }`}
+                      title={isHandHidden ? 'Click to show your cards' : 'Click to flip cards facedown for privacy'}
+                    >
+                      {isHandHidden ? (
+                        <>
+                          <Eye className="w-3.5 h-3.5 text-amber-700" />
+                          <span>Show Cards</span>
+                        </>
+                      ) : (
+                        <>
+                          <EyeOff className="w-3.5 h-3.5 text-slate-600" />
+                          <span>Hide Cards</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Order Hand Toggle Button */}
+                  {sortedHand.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={toggleSort}
+                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-xs font-bold shadow-sm flex items-center gap-1.5 transition hover:scale-105 active:scale-95"
+                    >
+                      <ArrowUpDown className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>{sortBy === 'suit' ? 'Sorted by Suit ♠♦♣♥' : 'Sorted by Rank (A..2)'}</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Hand Cards Container */}
+              {/* Hand Cards Container (Supports privacy flipped cards) */}
               <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2.5 max-w-full p-2.5 sm:p-3 bg-white/90 backdrop-blur-sm rounded-2xl border border-slate-200 shadow-md">
                 {sortedHand.length === 0 ? (
                   <div className="py-3 px-6 text-xs text-slate-400 font-medium">No cards in hand</div>
+                ) : isHandHidden ? (
+                  /* Cards flipped facedown for privacy */
+                  sortedHand.map((card, idx) => (
+                    <div key={card.id || idx} className="relative group">
+                      <PlayingCard
+                        isBack={true}
+                        size="md"
+                        onClick={() => setIsHandHidden(false)}
+                        className="hover:-translate-y-2 cursor-pointer transition-transform"
+                      />
+                    </div>
+                  ))
                 ) : (
                   sortedHand.map((card) => {
                     const isLegal = isPlayingPhase ? legalCardIds.includes(card.id) : true;
@@ -386,6 +427,11 @@ export const PortableTable: React.FC<PortableTableProps> = ({
                   })
                 )}
               </div>
+              {isHandHidden && sortedHand.length > 0 && (
+                <p className="text-[11px] text-slate-500 font-medium mt-1">
+                  🔒 Cards flipped facedown for privacy — tap any card to reveal
+                </p>
+              )}
             </div>
           )}
         </div>
