@@ -107,6 +107,7 @@ export interface ClientGameState {
   isMyTurn: boolean;
   canBid: boolean;
   validBids: number[];
+  isSpectator?: boolean;
 }
 
 export interface ChatMessage {

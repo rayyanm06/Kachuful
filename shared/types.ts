@@ -62,10 +62,18 @@ export interface GameSettings {
   consecutiveZeroLimit: number; // default 5 (for >=6 players)
 }
 
+export interface Spectator {
+  id: string;
+  name: string;
+  isConnected: boolean;
+  sessionToken: string;
+}
+
 export interface GameState {
   roomId: string;
   phase: GamePhase;
   players: Player[];
+  spectators?: Array<Omit<Spectator, 'sessionToken'>>;
   dealerIndex: number;
   currentTurnIndex: number;
   roundIndex: number; // 0-based
@@ -95,6 +103,7 @@ export interface ClientGameState extends Omit<GameState, 'players'> {
   isMyTurn: boolean;
   canBid: boolean;
   validBids: number[]; // Bids the current player is allowed to choose
+  isSpectator?: boolean;
 }
 
 export interface CreateRoomOptions {
