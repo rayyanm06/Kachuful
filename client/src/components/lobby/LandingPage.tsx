@@ -1,17 +1,23 @@
 import React, { useState } from 'react';
 import { RulesModal } from './RulesModal.js';
-import { ArrowRight, Smartphone, Layers, Shield } from 'lucide-react';
+import { ArrowRight, Smartphone, Layers, Shield, AlertCircle, Wifi, WifiOff } from 'lucide-react';
 
 interface LandingPageProps {
   onCreateRoom: (playerName: string, customMaxCards?: number) => void;
   onJoinRoom: (roomId: string, playerName: string) => void;
   onTransferSeat: (transferCode: string) => void;
+  errorMessage?: string | null;
+  onClearError?: () => void;
+  connected?: boolean;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
   onCreateRoom,
   onJoinRoom,
   onTransferSeat,
+  errorMessage,
+  onClearError,
+  connected = true,
 }) => {
   const [playerName, setPlayerName] = useState(() => localStorage.getItem('kachuful_player_name') || '');
   const [roomCode, setRoomCode] = useState('');
@@ -44,7 +50,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {/* Brand Header */}
       <header className="w-full max-w-[96%] xl:max-w-[1600px] flex items-center justify-between py-4 px-2">
         <div className="flex items-center gap-3">
-          {/* Logo Icon - Redesigned with royal indigo & gold card theme */}
+          {/* Logo Icon */}
           <div className="w-12 h-12 rounded-2xl bg-[#1e1b4b] border border-amber-500/30 flex items-center justify-center shadow-lg shrink-0">
             <svg className="w-9 h-9" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
               <rect x="25" y="20" width="50" height="60" rx="8" fill="white" stroke="#f59e0b" strokeWidth="2" />
@@ -61,57 +67,66 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </h1>
           </div>
         </div>
-      </header>
 
-      {/* Hero Banner Section (Midnight Indigo / Purple & Gold themed card) */}
-      <section className="w-full max-w-[96%] xl:max-w-[1600px] my-4 bg-gradient-to-br from-[#0f172a] via-[#1e1b4b] to-[#2e1065] rounded-[2.5rem] p-6 sm:p-10 md:p-12 text-white relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8 shadow-xl border border-indigo-500/20">
-        
-        {/* Subtle grid pattern background */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:30px_30px] pointer-events-none" />
-
-        <div className="max-w-2xl text-center md:text-left z-10">
-          <span className="text-[11px] font-black uppercase tracking-widest text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full border border-amber-500/20">
-            YOUR TABLE IS ONE CODE AWAY
-          </span>
-          <h2 className="text-4xl sm:text-5xl md:text-6xl font-black text-white tracking-tight leading-tight mt-4">
-            Call your bid.<br />Take your tricks.
-          </h2>
-          <p className="text-slate-300 text-sm sm:text-base md:text-lg mt-4 font-normal max-w-xl leading-relaxed">
-            A fast private table for game night, whether everyone is across the room or across the country.
-          </p>
-
-          <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-5 text-xs font-semibold text-slate-300">
-            <span className="flex items-center gap-1"><Shield className="w-3.5 h-3.5 text-amber-400" /> 3–12 players</span>
-            <span className="text-slate-500">•</span>
-            <span>No signup</span>
-            <span className="text-slate-500">•</span>
-            <span>Rejoin anytime</span>
+        {/* Top Header Actions (Connection Status + How to Play) */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Live Server Indicator */}
+          <div className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${
+            connected
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+              : 'bg-amber-50 text-amber-800 border-amber-300 animate-pulse'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+            <span>{connected ? 'Server Online' : 'Connecting to Server...'}</span>
           </div>
 
           <button
+            type="button"
             onClick={() => setShowRules(true)}
-            className="mt-6 px-6 py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold text-sm shadow-lg transition-all duration-200 hover:scale-[1.02] hover:shadow-amber-500/20"
+            className="px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-800 text-xs font-extrabold shadow-sm transition"
           >
-            How to Play
+            How to play
           </button>
         </div>
+      </header>
 
-        {/* Hero Card Graphic Art (Matches screenshot styling with dark backing) */}
-        <div className="relative w-64 h-48 flex items-center justify-center z-10 scale-90 sm:scale-100">
-          {/* Dark backing card with gold accent */}
-          <div className="absolute w-24 h-34 bg-[#1f2937] rounded-2xl border border-amber-500/40 -rotate-12 -translate-x-12 shadow-2xl flex items-center justify-center text-amber-500 text-xl font-bold">
-            ♠
+      {/* Hero Banner Area */}
+      <section className="w-full max-w-[96%] xl:max-w-[1600px] bg-gradient-to-br from-[#064e3b] via-[#047857] to-[#022c22] rounded-[2.5rem] p-6 sm:p-10 md:p-14 text-white relative overflow-hidden shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8 my-2 border border-emerald-500/20">
+        
+        {/* Felt Watermark Texture */}
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#ffffff_1.5px,transparent_1.5px)] [background-size:16px_16px] pointer-events-none" />
+
+        <div className="z-10 max-w-xl text-left">
+          <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-widest text-amber-400">
+            Private Tables • Real-Time Multiplayer
+          </span>
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black mt-2 leading-[1.05] tracking-tight">
+            Call your bid. Take your tricks.
+          </h2>
+          <p className="text-emerald-100 text-xs sm:text-sm mt-3 font-normal leading-relaxed">
+            The traditional Gujarati Judgement card game. Create a private table, invite friends with a room code, and play anywhere.
+          </p>
+
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-6">
+            <span className="px-3 py-1 rounded-full bg-black/20 border border-white/10 text-[11px] font-bold text-emerald-200">
+              👥 3 to 12 Players
+            </span>
+            <span className="px-3 py-1 rounded-full bg-black/20 border border-white/10 text-[11px] font-bold text-emerald-200">
+              ⚡ Instant Rejoin
+            </span>
+            <span className="px-3 py-1 rounded-full bg-black/20 border border-white/10 text-[11px] font-bold text-emerald-200">
+              📱 Mobile Friendly
+            </span>
           </div>
-          {/* 2 of Diamonds */}
-          <div className="absolute w-24 h-34 bg-white rounded-2xl border border-slate-200 -rotate-6 -translate-x-4 shadow-2xl p-2 flex flex-col justify-between text-red-600 select-none">
-            <div className="font-bold text-xs leading-none">2 ♦</div>
-            <div className="text-center text-xl flex flex-col items-center">
-              <span>♦</span>
-              <span className="-mt-1 text-xs">♦</span>
-            </div>
-            <div className="font-bold text-xs leading-none rotate-180 self-end">2 ♦</div>
+        </div>
+
+        {/* Decorative Graphic Fanned Cards */}
+        <div className="relative w-48 h-40 hidden md:flex items-center justify-center pointer-events-none">
+          {/* Card 1 Back */}
+          <div className="absolute w-24 h-34 bg-[#b91c1c] rounded-2xl border-2 border-white -rotate-12 -translate-x-8 shadow-2xl p-2 flex items-center justify-center">
+            <div className="w-full h-full border border-white/30 rounded-xl bg-red-900/40" />
           </div>
-          {/* Ace of Spades */}
+          {/* Card 2 Ace of Spades */}
           <div className="absolute w-24 h-34 bg-white rounded-2xl border border-slate-200 rotate-12 translate-x-8 shadow-2xl p-2 flex flex-col justify-between text-slate-900 select-none">
             <div className="font-bold text-xs leading-none">A ♠</div>
             <div className="text-center text-3xl">♠</div>
@@ -122,6 +137,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
       {/* Main Lobby Container */}
       <section className="w-full max-w-[96%] xl:max-w-[1600px] bg-white border border-slate-200/80 rounded-[2.5rem] p-6 sm:p-10 shadow-md mt-4">
+        
+        {/* Red Warning Line Alert */}
+        {errorMessage && (
+          <div className="mb-6 p-4 rounded-2xl bg-rose-50 border-2 border-rose-400 text-rose-950 text-xs sm:text-sm font-bold flex items-center justify-between shadow-md animate-fade-in">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+            {onClearError && (
+              <button
+                type="button"
+                onClick={onClearError}
+                className="ml-3 text-rose-600 hover:text-rose-900 font-black text-sm px-2 py-1 rounded-lg hover:bg-rose-100 transition"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="mb-6 text-left">
           <span className="text-[11px] font-extrabold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
             Take a seat
@@ -135,7 +170,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
 
         {/* Player Name Input */}
-        <div className="mb-6 max-w-md">
+        <div className="mb-6 max-w-md text-left">
           <label htmlFor="player-name" className="block text-xs font-extrabold text-slate-700 mb-2">
             Player name
           </label>
@@ -144,9 +179,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             type="text"
             required
             maxLength={16}
-            placeholder="Your name"
+            placeholder="Your name (e.g. Rayyan)"
             value={playerName}
-            onChange={(e) => setPlayerName(e.target.value)}
+            onChange={(e) => {
+              setPlayerName(e.target.value);
+              if (errorMessage && onClearError) onClearError();
+            }}
             className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm font-medium transition"
           />
         </div>
@@ -171,7 +209,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   maxLength={6}
                   placeholder="Room code"
                   value={roomCode}
-                  onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                  onChange={(e) => {
+                    setRoomCode(e.target.value.toUpperCase());
+                    if (errorMessage && onClearError) onClearError();
+                  }}
                   className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono font-black text-center tracking-widest uppercase placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                 />
               </div>
@@ -245,7 +286,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 type="text"
                 placeholder="6-Letter Transfer code"
                 value={transferCode}
-                onChange={(e) => setTransferCode(e.target.value.toUpperCase())}
+                onChange={(e) => {
+                  setTransferCode(e.target.value.toUpperCase());
+                  if (errorMessage && onClearError) onClearError();
+                }}
                 className="w-full sm:flex-1 px-4 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono font-bold text-center tracking-widest placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm uppercase"
               />
               <button

@@ -15,6 +15,7 @@ export function App() {
   const [showScoreboard, setShowScoreboard] = useState(false);
 
   const {
+    connected,
     gameState,
     errorMessage,
     clearError,
@@ -39,6 +40,9 @@ export function App() {
         onCreateRoom={(name, customMaxCards) => createRoom(name, customMaxCards)}
         onJoinRoom={(roomId, name) => joinRoom(roomId, name)}
         onTransferSeat={(code) => transferSeat(code)}
+        errorMessage={errorMessage}
+        onClearError={clearError}
+        connected={connected}
       />
     );
   }
@@ -58,12 +62,12 @@ export function App() {
 
   return (
     <div className="min-h-screen w-full flex flex-col justify-between overflow-x-hidden bg-[#f4f7f5] text-slate-900 selection:bg-indigo-600 selection:text-white">
-      {/* Toast Error Alert */}
+      {/* Toast Error Alert in Game */}
       {errorMessage && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-rose-50 border border-rose-300 text-rose-800 text-xs font-semibold shadow-lg animate-fade-in">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-900 text-xs font-bold shadow-xl animate-fade-in">
           <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
           <span>{errorMessage}</span>
-          <button onClick={clearError} className="ml-2 opacity-70 hover:opacity-100 font-bold">✕</button>
+          <button onClick={clearError} className="ml-2 text-rose-600 hover:text-rose-950 font-black">✕</button>
         </div>
       )}
 

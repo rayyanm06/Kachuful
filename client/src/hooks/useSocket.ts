@@ -4,7 +4,9 @@ import { ClientGameState, ChatMessage } from '../types/index.js';
 
 const SOCKET_SERVER_URL =
   import.meta.env.VITE_SERVER_URL ||
-  (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3001` : 'http://localhost:3001');
+  (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:3001'
+    : 'https://kachuful-2nc2.onrender.com');
 
 const STORAGE_KEYS = {
   ROOM_ID: 'kachuful_room_id',
@@ -31,14 +33,16 @@ export function useSocket(onSound?: (sound: any) => void) {
 
   useEffect(() => {
     const socket = io(SOCKET_SERVER_URL, {
-      reconnectionAttempts: 10,
+      reconnectionAttempts: 15,
       reconnectionDelay: 1000,
+      transports: ['websocket', 'polling'],
     });
     socketRef.current = socket;
 
     socket.on('connect', () => {
       console.log('[Client Socket] Connected:', socket.id);
       setConnected(true);
+      setErrorMessage(null);
 
       // Auto-reconnect if session token exists in local storage
       const savedRoomId = localStorage.getItem(STORAGE_KEYS.ROOM_ID);
@@ -60,20 +64,27 @@ export function useSocket(onSound?: (sound: any) => void) {
       setConnected(false);
     });
 
+    socket.on('connect_error', () => {
+      setConnected(false);
+    });
+
     socket.on('roomCreated', (data: { roomId: string; sessionToken: string; playerId: string }) => {
       localStorage.setItem(STORAGE_KEYS.ROOM_ID, data.roomId);
       localStorage.setItem(STORAGE_KEYS.SESSION_TOKEN, data.sessionToken);
       setSessionInfo(data);
+      setErrorMessage(null);
     });
 
     socket.on('roomJoined', (data: { roomId: string; sessionToken: string; playerId: string }) => {
       localStorage.setItem(STORAGE_KEYS.ROOM_ID, data.roomId);
       localStorage.setItem(STORAGE_KEYS.SESSION_TOKEN, data.sessionToken);
       setSessionInfo(data);
+      setErrorMessage(null);
     });
 
     socket.on('gameStateUpdated', (state: ClientGameState) => {
       setGameState(state);
+      setErrorMessage(null);
     });
 
     socket.on('soundTrigger', (soundType: any) => {
@@ -90,7 +101,7 @@ export function useSocket(onSound?: (sound: any) => void) {
       setErrorMessage(msg);
       setTimeout(() => {
         setErrorMessage((cur) => (cur === msg ? null : cur));
-      }, 5000);
+      }, 7000);
     });
 
     return () => {
@@ -100,7 +111,11 @@ export function useSocket(onSound?: (sound: any) => void) {
 
   const createRoom = useCallback((playerName: string, customMaxCards?: number) => {
     localStorage.setItem(STORAGE_KEYS.PLAYER_NAME, playerName);
-    socketRef.current?.emit('createRoom', { playerName, customMaxCards }, (res: any) => {
+    if (!socketRef.current?.connected) {
+      setErrorMessage('Connecting to game server... Please wait a few seconds and try again.');
+      return;
+    }
+    socketRef.current.emit('createRoom', { playerName, customMaxCards }, (res: any) => {
       if (!res?.success && res?.error) {
         setErrorMessage(res.error);
       }
@@ -109,8 +124,12 @@ export function useSocket(onSound?: (sound: any) => void) {
 
   const joinRoom = useCallback((roomId: string, playerName: string) => {
     localStorage.setItem(STORAGE_KEYS.PLAYER_NAME, playerName);
+    if (!socketRef.current?.connected) {
+      setErrorMessage('Connecting to game server... Please wait a few seconds and try again.');
+      return;
+    }
     const existingToken = localStorage.getItem(STORAGE_KEYS.SESSION_TOKEN) || undefined;
-    socketRef.current?.emit('joinRoom', { roomId, playerName, sessionToken: existingToken }, (res: any) => {
+    socketRef.current.emit('joinRoom', { roomId, playerName, sessionToken: existingToken }, (res: any) => {
       if (!res?.success && res?.error) {
         setErrorMessage(res.error);
       }
@@ -118,7 +137,11 @@ export function useSocket(onSound?: (sound: any) => void) {
   }, []);
 
   const transferSeat = useCallback((transferCode: string) => {
-    socketRef.current?.emit('transferSeat', { transferCode }, (res: any) => {
+    if (!socketRef.current?.connected) {
+      setErrorMessage('Connecting to game server... Please wait a few seconds and try again.');
+      return;
+    }
+    socketRef.current.emit('transferSeat', { transferCode }, (res: any) => {
       if (!res?.success && res?.error) {
         setErrorMessage(res.error);
       }
